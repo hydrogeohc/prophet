@@ -527,7 +527,8 @@ class Prophet(object):
         return holiday_features, prior_scale_list, holiday_names
 
     def add_regressor(
-            self, name, prior_scale=None, standardize='auto', mode=None
+            self, name, prior_scale=None, standardize='auto', mode=None,
+            modify_seasonality=False
     ):
         """Add an additional regressor to be used for fitting and predicting.
 
@@ -575,6 +576,7 @@ class Prophet(object):
             'mu': 0.,
             'std': 1.,
             'mode': mode,
+            'modify_seasonality': modify_seasonality
         }
         return self
 
@@ -665,10 +667,23 @@ class Prophet(object):
                 props['fourier_order'],
                 name,
             )
-            seasonal_features.append(features)
             prior_scales.extend(
                 [props['prior_scale']] * features.shape[1])
             modes[props['mode']].append(name)
+
+            seasonal_columns = features.columns.copy()
+            # Seasonal modifiers
+            for extra_name, extra_props in self.extra_regressors.items():
+                if extra_props['modify_seasonality']:
+                    for season_feature in seasonal_columns:
+                        new_feature_name = ':'.join([season_feature, extra_name])
+                        features[new_feature_name] = df[extra_name] * features[season_feature]
+                        prior_scales.extend([extra_props['prior_scale']])
+                        modes[props['mode']].append(new_feature_name)
+
+
+            seasonal_features.append(features)
+
 
         # Holiday features
         if self.holidays is not None or self.append_holidays is not None:
